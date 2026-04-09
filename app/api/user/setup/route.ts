@@ -3,7 +3,7 @@ import { connectDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { parseInstagram } from "@/lib/instagram";
 
-export async function POST(req: Request) {
+async function handleSetup(req: Request) {
   try {
     await connectDb();
     const user = await getCurrentUser();
@@ -36,4 +36,12 @@ export async function POST(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: "Setup failed", details: String(error) }, { status: 400 });
   }
+}
+
+export async function POST(req: Request) {
+  return handleSetup(req);
+}
+
+export async function PUT(req: Request) {
+  return handleSetup(req);
 }
