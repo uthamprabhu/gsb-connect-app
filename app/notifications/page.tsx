@@ -13,11 +13,11 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!token) return router.push("/");
-    if (!hasCompletedSetup(user)) return router.push("/setup");
+    if (user && !hasCompletedSetup(user)) return router.push("/setup");
     api("/api/notifications", token)
       .then((res) => setNotifications(res.notifications || []))
       .catch(() => {});
-  }, [router, setNotifications, token, user]);
+  }, [router, setNotifications, token]);
 
   return (
     <main className="screen-shell gap-4">

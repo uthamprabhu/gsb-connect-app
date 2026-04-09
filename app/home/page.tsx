@@ -7,6 +7,7 @@ import { Heart, LoaderCircle, Sparkles, Copy, ExternalLink } from "lucide-react"
 import { IoGameController } from "react-icons/io5";
 import { toast } from "sonner";
 import { api, hasCompletedSetup } from "@/lib/client-api";
+import { enableFcmAndGetToken } from "@/lib/fcm-client";
 import { useAppStore } from "@/store/use-app-store";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ export default function HomePage() {
   const router = useRouter();
   const { token, user, attemptsLeft, notifications, setUser, setAttemptsLeft, setNotifications } = useAppStore();
   const [loading, setLoading] = useState(false);
+  const [enablingPush, setEnablingPush] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [stats, setStats] = useState({ totalUsers: 0, maleCount: 0, femaleCount: 0 });
   const currentUser = (user || {}) as {
     instagramUsername?: string;
@@ -27,7 +30,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!token) return router.push("/");
-    if (!hasCompletedSetup(user)) return router.push("/setup");
+    if (user && !hasCompletedSetup(user)) return router.push("/setup");
     api("/api/user/me", token)
       .then((res) => {
         setUser(res.user);
@@ -35,20 +38,73 @@ export default function HomePage() {
         setStats(res.stats);
       })
       .catch(() => {});
-  }, [router, setAttemptsLeft, setUser, token, user]);
+  }, [router, setAttemptsLeft, setUser, token]);
 
   useEffect(() => {
     if (!token) return;
-    const id = setInterval(async () => {
+    const fetchNotifications = async () => {
       try {
         const res = await api("/api/notifications", token);
         setNotifications(res.notifications || []);
       } catch {}
-    }, 6000);
+    };
+    void fetchNotifications();
+    const id = setInterval(fetchNotifications, 15000);
     return () => clearInterval(id);
   }, [setNotifications, token]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const ratio = useMemo(() => (stats.totalUsers ? `${stats.maleCount}/${stats.femaleCount}` : "0/0"), [stats]);
+  const canShowPrompt =
+    mounted &&
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    Notification.permission !== "granted";
+
+  async function enableNotifications() {
+    if (!token) return;
+    setEnablingPush(true);
+    try {
+      const fcmToken = await enableFcmAndGetToken();
+      await api("/api/notifications/register-token", token, {
+        method: "POST",
+        body: JSON.stringify({ fcmToken }),
+      });
+      toast.success("Notifications enabled. You will never miss a match.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes("denied")) {
+        toast.error("Permission denied. Enable notifications from browser settings.");
+      } else if (message.toLowerCase().includes("vapid")) {
+        toast.error("FCM config issue: invalid VAPID key. Update NEXT_PUBLIC_FIREBASE_VAPID_KEY and restart dev server.");
+      } else {
+        toast.error(message || "Unable to enable notifications right now.");
+      }
+    } finally {
+      setEnablingPush(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!token || typeof window === "undefined") return;
+    if (Notification.permission !== "granted") return;
+    const registerIfGranted = async () => {
+      try {
+        const fcmToken = await enableFcmAndGetToken();
+        await api("/api/notifications/register-token", token, {
+          method: "POST",
+          body: JSON.stringify({ fcmToken }),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn("FCM auto-register failed:", message);
+      }
+    };
+    void registerIfGranted();
+  }, [token]);
 
   async function findMatch() {
     setLoading(true);
@@ -57,7 +113,12 @@ export default function HomePage() {
       setAttemptsLeft(res.attemptsLeft);
       toast.success("Request sent. Your vibe is now in play.");
     } catch (e) {
-      toast.error(String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.toLowerCase().includes("no users available right now")) {
+        toast.info("No users available right now.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +152,15 @@ export default function HomePage() {
         <div><p className="text-slate-300">M/F</p><p className="text-xl font-bold">{ratio}</p></div>
         <div><p className="text-slate-300">Attempts</p><p className="text-xl font-bold">{attemptsLeft}</p></div>
       </Card>
+
+      {canShowPrompt ? (
+        <Card className="space-y-2">
+          <p className="text-sm text-cyan-100">Enable notifications to never miss a match 🔔</p>
+          <Button size="sm" onClick={enableNotifications} disabled={enablingPush}>
+            {enablingPush ? "Enabling..." : "Enable Notifications"}
+          </Button>
+        </Card>
+      ) : null}
 
       <Card className="space-y-3 text-center">
         <IoGameController className="mx-auto h-8 w-8 text-fuchsia-300" />

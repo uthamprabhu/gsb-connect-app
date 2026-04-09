@@ -2,9 +2,9 @@
 
 import Lottie from "lottie-react";
 import { motion } from "framer-motion";
+import { Sparkles, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
-
-const slotAnimation = { v: "5.7.4", fr: 30, ip: 0, op: 30, w: 200, h: 200, nm: "pulse", ddd: 0, assets: [], layers: [] };
+import SlotLoader from "@/components/SlotLoader";
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
@@ -14,9 +14,16 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           GSB Connect
         </motion.h1>
         <p className="text-sm text-slate-300">Play to connect, reveal only on mutual vibe.</p>
-        <div className="mx-auto w-24 text-cyan-300">
-          <Lottie animationData={slotAnimation} loop />
+        <div className="flex items-center justify-center gap-2 text-xs text-cyan-200">
+          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-1">
+            <Sparkles className="h-3.5 w-3.5" /> Gamified
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-1">
+            <ShieldCheck className="h-3.5 w-3.5" /> Secure OTP
+          </span>
         </div>
+
+        <SlotLoader />
       </Card>
       {children}
     </main>

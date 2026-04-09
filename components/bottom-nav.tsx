@@ -27,7 +27,7 @@ export function BottomNav() {
                 pathname === item.href ? "bg-white/10 text-cyan-300" : "text-slate-300",
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-5 w-5" />
               {item.label}
             </Link>
           );

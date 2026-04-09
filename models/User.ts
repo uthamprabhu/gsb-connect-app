@@ -22,6 +22,7 @@ const userSchema = new Schema(
     matchStartedAt: { type: Date, default: null },
     freezeUntil: { type: Date, default: null },
     magicKey: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    fcmToken: { type: String, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: true } },
 );

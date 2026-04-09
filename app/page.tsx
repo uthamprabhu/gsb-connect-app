@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
+import { KeyRound, MessageSquareLock, PhoneCall } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell } from "@/components/auth-shell";
 import { Card } from "@/components/ui/card";
@@ -18,8 +19,12 @@ export default function LandingPage() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [magicKey, setMagicKey] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [magicLoading, setMagicLoading] = useState(false);
   const [confirmResult, setConfirmResult] = useState<ConfirmationResult | null>(null);
+  const normalizedPhone = phone.trim();
+  const isValidE164 = /^\+[1-9]\d{7,14}$/.test(normalizedPhone);
 
   useEffect(() => {
     if (typeof window !== "undefined" && !window.recaptchaVerifier) {
@@ -39,24 +44,24 @@ export default function LandingPage() {
   }, [router, setAttemptsLeft, setUser, token]);
 
   async function sendOtp() {
-    if (!/^\+91\d{10}$/.test(phone)) {
-      return toast.error("Use valid format like +919876543210");
+    if (!isValidE164) {
+      return toast.error("Use international format like +14155552671");
     }
-    setLoading(true);
+    setSendingOtp(true);
     try {
-      const result = await signInWithPhoneNumber(firebaseAuth, phone, window.recaptchaVerifier);
+      const result = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, window.recaptchaVerifier);
       setConfirmResult(result);
       toast.success("OTP sent");
     } catch (e) {
       toast.error(String(e));
     } finally {
-      setLoading(false);
+      setSendingOtp(false);
     }
   }
 
   async function verifyOtp() {
     if (!confirmResult || otp.length !== 6) return toast.error("Enter 6-digit OTP");
-    setLoading(true);
+    setVerifyingOtp(true);
     try {
       const cred = await confirmResult.confirm(otp);
       const idToken = await cred.user.getIdToken();
@@ -68,13 +73,13 @@ export default function LandingPage() {
     } catch (e) {
       toast.error(String(e));
     } finally {
-      setLoading(false);
+      setVerifyingOtp(false);
     }
   }
 
   async function magicLogin() {
     if (!magicKey.trim()) return toast.error("Enter your magic key");
-    setLoading(true);
+    setMagicLoading(true);
     try {
       const res = await api("/api/auth/magic-login", null, { method: "POST", body: JSON.stringify({ magicKey }) });
       setToken(res.token);
@@ -84,33 +89,52 @@ export default function LandingPage() {
     } catch (e) {
       toast.error(String(e));
     } finally {
-      setLoading(false);
+      setMagicLoading(false);
     }
   }
 
   return (
     <AuthShell>
       <Card className="space-y-3">
-        <p className="text-xs text-slate-300">Phone login (India format)</p>
-        <Input placeholder="+919876543210" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <p className="text-xs text-slate-400">Required: country code +91 and 10-digit number.</p>
-        <Button onClick={sendOtp} className="w-full" disabled={loading}>
-          {loading ? "Sending..." : "Send OTP"}
-        </Button>
+        <p className="text-xs text-slate-300">Phone login (global)</p>
+        <Input placeholder="+14155552671" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <p className="text-xs text-amber-300">
+          Enter full country code with no spaces. Examples: India `+919876543210`, UAE `+971501234567`, USA `+14155552671`
+        </p>
+        {isValidE164 ? (
+          <Button onClick={sendOtp} className="w-full" disabled={sendingOtp || verifyingOtp || magicLoading}>
+            <PhoneCall className="mr-2 h-4 w-4" />
+            {sendingOtp ? "Sending..." : "Send OTP"}
+          </Button>
+        ) : (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            Use valid E.164 format: starts with `+` and country code, no spaces.
+          </div>
+        )}
         <Input placeholder="6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
-        <Button onClick={verifyOtp} className="w-full" disabled={loading || !confirmResult}>
-          Verify OTP
+        <Button onClick={verifyOtp} className="w-full" disabled={sendingOtp || verifyingOtp || magicLoading || !confirmResult}>
+          <MessageSquareLock className="mr-2 h-4 w-4" />
+          {verifyingOtp ? "Verifying..." : "Verify OTP"}
         </Button>
         <div id="recaptcha-container" />
       </Card>
 
       <Card className="space-y-3">
         <p className="text-xs text-slate-300">Fast login (already registered users)</p>
-        <Input placeholder="Your unique magic key" value={magicKey} onChange={(e) => setMagicKey(e.target.value)} />
-        <p className="text-xs text-slate-400">Required: exactly the key you created during setup.</p>
-        <Button variant="ghost" className="w-full" onClick={magicLogin}>
-          Login with Magic Key
-        </Button>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void magicLogin();
+          }}
+        >
+          <Input placeholder="Your unique magic key" value={magicKey} onChange={(e) => setMagicKey(e.target.value)} />
+          <p className="text-xs text-slate-400">Required: exactly the key you created during setup.</p>
+          <Button type="submit" variant="ghost" className="w-full" disabled={sendingOtp || verifyingOtp || magicLoading}>
+            <KeyRound className="mr-2 h-4 w-4 text-cyan-300" />
+            {magicLoading ? "Submitting..." : "Login with Magic Key"}
+          </Button>
+        </form>
       </Card>
     </AuthShell>
   );

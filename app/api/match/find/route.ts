@@ -3,6 +3,7 @@ import { connectDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { User } from "@/models/User";
 import { Notification } from "@/models/Notification";
+import { sendPushNotification } from "@/lib/sendNotification";
 
 export async function POST() {
   try {
@@ -33,10 +34,23 @@ export async function POST() {
     me.attemptsLeft -= 1;
     await me.save();
 
+    if (me.attemptsLeft === 0) {
+      await sendPushNotification(
+        me.fcmToken,
+        "No attempts left",
+        "You’ve used all attempts. Come back later ⏳",
+      );
+    }
+
     if (!candidate.pendingRequests.some((id: unknown) => String(id) === String(me._id))) {
       candidate.pendingRequests.push(me._id);
       await candidate.save();
       await Notification.create({ userId: candidate._id, fromUserId: me._id, type: "match_request" });
+      await sendPushNotification(
+        candidate.fcmToken,
+        "Someone is interested 👀",
+        "You’ve got a new match request. Tap to check!",
+      );
     }
 
     return NextResponse.json({ ok: true, attemptsLeft: me.attemptsLeft });

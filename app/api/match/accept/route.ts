@@ -3,6 +3,7 @@ import { connectDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { User } from "@/models/User";
 import { Notification } from "@/models/Notification";
+import { sendPushNotification } from "@/lib/sendNotification";
 
 export async function POST(req: Request) {
   try {
@@ -35,6 +36,12 @@ export async function POST(req: Request) {
       fromUser.save(),
       Notification.create({ userId: fromUser._id, fromUserId: me._id, type: "match_accepted" }),
     ]);
+
+    await sendPushNotification(
+      fromUser.fcmToken,
+      "It’s a match 🎉",
+      "You both matched! Tap to reveal and connect.",
+    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {

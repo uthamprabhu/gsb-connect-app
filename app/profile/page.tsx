@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Slider from "@mui/material/Slider";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { api, hasCompletedSetup } from "@/lib/client-api";
 import { useAppStore } from "@/store/use-app-store";
@@ -17,6 +18,7 @@ export default function ProfilePage() {
   const { token, user, setUser, setAttemptsLeft, logout } = useAppStore();
   const hydratedRef = useRef(false);
   const [loading, setLoading] = useState(false);
+  const [showMagicKey, setShowMagicKey] = useState(false);
   const [form, setForm] = useState({
     instagramInput: "",
     magicKey: "",
@@ -28,6 +30,15 @@ export default function ProfilePage() {
   });
   const selectClass =
     "w-full rounded-xl border border-white/10 bg-slate-900/80 p-3 text-sm text-slate-100 outline-none ring-fuchsia-500 focus:ring-2";
+  const initialFormRef = useRef<{
+    instagramInput: string;
+    magicKey: string;
+    gender: string;
+    preference: string;
+    age: number;
+    ageRange: number[];
+    tags: string[];
+  } | null>(null);
 
   const currentUser = (user || {}) as {
     instagramUsername?: string;
@@ -43,7 +54,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!token) return router.push("/");
-    if (!hasCompletedSetup(user)) return router.push("/setup");
+    if (user && !hasCompletedSetup(user)) return router.push("/setup");
     if (hydratedRef.current) return;
     api("/api/user/me", token)
       .then((res) => {
@@ -58,12 +69,36 @@ export default function ProfilePage() {
           ageRange: [res.user.ageRange?.min || 20, res.user.ageRange?.max || 30],
           tags: Array.isArray(res.user.tags) ? res.user.tags : [],
         });
+        initialFormRef.current = {
+          instagramInput: res.user.instagramUrl || res.user.instagramUsername || "",
+          magicKey: res.user.magicKey || "",
+          gender: res.user.gender || "male",
+          preference: res.user.preference || "female",
+          age: res.user.age || 24,
+          ageRange: [res.user.ageRange?.min || 20, res.user.ageRange?.max || 30],
+          tags: Array.isArray(res.user.tags) ? res.user.tags : [],
+        };
         hydratedRef.current = true;
       })
       .catch(() => {});
-  }, [router, setAttemptsLeft, setUser, token, user]);
+  }, [router, setAttemptsLeft, setUser, token]);
+
+  const isDirty =
+    !!initialFormRef.current &&
+    JSON.stringify({
+      ...form,
+      tags: [...form.tags].sort(),
+    }) !==
+      JSON.stringify({
+        ...initialFormRef.current,
+        tags: [...initialFormRef.current.tags].sort(),
+      });
 
   async function updateProfile() {
+    if (!isDirty) {
+      toast.info("No changes detected. Update skipped.");
+      return;
+    }
     if (!form.instagramInput.trim()) return toast.error("Instagram is required");
     if (!form.magicKey.trim()) return toast.error("Magic key is required");
     if (form.tags.length < 3 || form.tags.length > 5) return toast.error("Select 3 to 5 tags");
@@ -82,6 +117,15 @@ export default function ProfilePage() {
         }),
       });
       setUser(res.user);
+      initialFormRef.current = {
+        instagramInput: form.instagramInput,
+        magicKey: form.magicKey,
+        gender: form.gender,
+        preference: form.preference,
+        age: form.age,
+        ageRange: [...form.ageRange],
+        tags: [...form.tags],
+      };
       toast.success("Profile updated successfully");
     } catch (e) {
       toast.error(String(e));
@@ -103,7 +147,21 @@ export default function ProfilePage() {
         <label className="text-xs text-slate-300">Instagram Username or URL (required)</label>
         <Input value={form.instagramInput} onChange={(e) => setForm((prev) => ({ ...prev, instagramInput: e.target.value }))} />
         <label className="text-xs text-slate-300">Magic Key (required, unique)</label>
-        <Input value={form.magicKey} onChange={(e) => setForm((prev) => ({ ...prev, magicKey: e.target.value }))} />
+        <div className="relative">
+          <Input
+            type={showMagicKey ? "text" : "password"}
+            value={form.magicKey}
+            onChange={(e) => setForm((prev) => ({ ...prev, magicKey: e.target.value }))}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowMagicKey((prev) => !prev)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-300 hover:bg-white/10"
+          >
+            {showMagicKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </Card>
 
       <Card className="space-y-3">
@@ -167,7 +225,7 @@ export default function ProfilePage() {
       </Card>
 
       <Button onClick={updateProfile} disabled={loading}>
-        {loading ? "Updating..." : "Update Profile"}
+        {loading ? "Updating..." : isDirty ? "Update Profile" : "No Changes Yet"}
       </Button>
       <Button
         variant="danger"

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { NotificationBootstrap } from "@/components/notification-bootstrap";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,10 +27,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+      <body suppressHydrationWarning className="min-h-full flex flex-col bg-slate-950 text-slate-100">
         {children}
+        <NotificationBootstrap />
         <Toaster richColors position="top-center" />
       </body>
     </html>
