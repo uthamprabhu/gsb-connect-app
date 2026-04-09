@@ -24,6 +24,8 @@ export default function SetupPage() {
     ageRange: [20, 30] as number[],
     tags: [] as string[],
   });
+  const selectClass =
+    "w-full rounded-xl border border-white/10 bg-slate-900/80 p-3 text-sm text-slate-100 outline-none ring-fuchsia-500 focus:ring-2";
 
   useEffect(() => {
     if (!token) return router.push("/");
@@ -70,39 +72,46 @@ export default function SetupPage() {
 
       <Card className="space-y-3">
         <label className="text-xs text-slate-300">Instagram Username or URL (required)</label>
-        <Input placeholder="@username or https://instagram.com/username" value={form.instagramInput} onChange={(e) => setForm({ ...form, instagramInput: e.target.value })} />
+        <Input placeholder="@username or https://instagram.com/username" value={form.instagramInput} onChange={(e) => setForm((prev) => ({ ...prev, instagramInput: e.target.value }))} />
         <label className="text-xs text-slate-300">Magic Key (required, unique)</label>
-        <Input placeholder="Example: moonTiger27" value={form.magicKey} onChange={(e) => setForm({ ...form, magicKey: e.target.value })} />
+        <Input placeholder="Example: moonTiger27" value={form.magicKey} onChange={(e) => setForm((prev) => ({ ...prev, magicKey: e.target.value }))} />
         <p className="text-xs text-slate-400">Hint: this is your quick login key. Keep it memorable.</p>
       </Card>
 
       <Card className="space-y-3">
         <label className="text-xs text-slate-300">Your Gender (required)</label>
-        <select className="rounded-xl bg-slate-900/70 p-2" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+        <select className={selectClass} value={form.gender} onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}>
           {GENDER_OPTIONS.map((g) => (
             <option key={g}>{g}</option>
           ))}
         </select>
 
         <label className="text-xs text-slate-300">Match Preference (required)</label>
-        <select className="rounded-xl bg-slate-900/70 p-2" value={form.preference} onChange={(e) => setForm({ ...form, preference: e.target.value })}>
+        <select className={selectClass} value={form.preference} onChange={(e) => setForm((prev) => ({ ...prev, preference: e.target.value }))}>
           {PREFERENCE_OPTIONS.map((g) => (
             <option key={g}>{g}</option>
           ))}
         </select>
       </Card>
 
-      <Card className="space-y-4">
-        <label className="text-xs text-slate-300">Age (required): {form.age}</label>
-        <Slider min={18} max={60} value={form.age} onChange={(_, value) => setForm({ ...form, age: Number(value) })} sx={{ color: "#22d3ee" }} />
+      <Card className="space-y-4 border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-600/10 to-cyan-500/10">
+        <label className="text-xs font-semibold tracking-wide text-cyan-200">Age (required): {form.age}</label>
+        <Slider
+          min={18}
+          max={60}
+          value={form.age}
+          onChange={(_, value) => setForm((prev) => ({ ...prev, age: Number(value) }))}
+          valueLabelDisplay="auto"
+          sx={{ color: "#22d3ee", "& .MuiSlider-thumb": { boxShadow: "0 0 0 8px rgba(34,211,238,0.15)" } }}
+        />
         <label className="text-xs text-slate-300">Preferred age range (required): {form.ageRange[0]} - {form.ageRange[1]}</label>
         <Slider
           min={18}
           max={60}
           value={form.ageRange}
-          onChange={(_, value) => setForm({ ...form, ageRange: value as number[] })}
+          onChange={(_, value) => setForm((prev) => ({ ...prev, ageRange: value as number[] }))}
           valueLabelDisplay="auto"
-          sx={{ color: "#a855f7" }}
+          sx={{ color: "#a855f7", "& .MuiSlider-thumb": { boxShadow: "0 0 0 8px rgba(168,85,247,0.15)" } }}
         />
       </Card>
 
@@ -114,6 +123,7 @@ export default function SetupPage() {
             return (
               <button
                 key={tag}
+                type="button"
                 onClick={() =>
                   setForm((prev) => ({
                     ...prev,
