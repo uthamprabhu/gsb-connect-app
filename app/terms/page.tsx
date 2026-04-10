@@ -79,7 +79,7 @@ export default function TermsPage() {
           <p>
             For support or policy questions, contact the developer:{" "}
             <a
-              href="mailto:zappermash1@gamil.com"
+              href="mailto:zappermash1@gmail.com"
               className="font-semibold text-cyan-300 underline decoration-cyan-400/60 underline-offset-4 hover:text-cyan-200"
             >
               zorscode
