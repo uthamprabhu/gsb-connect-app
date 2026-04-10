@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Slider from "@mui/material/Slider";
-import { Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, hasCompletedSetup } from "@/lib/client-api";
 import { logoutClientSession } from "@/lib/session-client";
@@ -13,12 +13,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/bottom-nav";
+import { LegalFooter } from "@/components/legal-footer";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { token, user, hasHydrated, authReady, setUser, setAttemptsLeft } = useAppStore();
   const hydratedRef = useRef(false);
   const [loading, setLoading] = useState(false);
+  const [termsSaving, setTermsSaving] = useState(false);
   const [showMagicKey, setShowMagicKey] = useState(false);
   const [form, setForm] = useState({
     instagramInput: "",
@@ -52,6 +54,8 @@ export default function ProfilePage() {
     age?: number;
     ageRange?: { min?: number; max?: number };
     tags?: string[];
+    termsAccepted?: boolean;
+    termsAcceptedAt?: string | null;
   };
 
   useEffect(() => {
@@ -134,6 +138,25 @@ export default function ProfilePage() {
       toast.error(String(e));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function acceptTerms() {
+    if (!token || currentUser.termsAccepted || termsSaving) return;
+    setTermsSaving(true);
+    try {
+      await api("/api/user/terms", token, {
+        method: "PUT",
+        body: JSON.stringify({ accepted: true }),
+      });
+      const me = await api("/api/user/me", token);
+      setUser(me.user);
+      setAttemptsLeft(Number(me.user.attemptsLeft) || 0);
+      toast.success("Terms accepted successfully.");
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setTermsSaving(false);
     }
   }
 
@@ -236,6 +259,42 @@ export default function ProfilePage() {
         </div>
       </Card>
 
+      <Card className="space-y-3">
+        <h3 className="text-sm font-semibold text-white">Terms & Conditions</h3>
+        <label
+          className={`flex items-start gap-3 rounded-xl border p-3 ${
+            currentUser.termsAccepted ? "cursor-not-allowed border-emerald-400/30 bg-emerald-500/10" : "cursor-pointer border-white/10 bg-white/5"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={!!currentUser.termsAccepted}
+            onChange={(event) => {
+              if (event.target.checked) {
+                void acceptTerms();
+              }
+            }}
+            disabled={!!currentUser.termsAccepted || termsSaving}
+            className="mt-1 h-4 w-4 accent-cyan-400"
+          />
+          <span className={`text-xs ${currentUser.termsAccepted ? "text-emerald-100" : "text-slate-300"}`}>
+            {currentUser.termsAccepted ? "Terms & Conditions accepted. You can still read them anytime: " : "I agree to the "}
+            <a href="/terms" target="_blank" rel="noreferrer" className="text-cyan-300 underline underline-offset-4">
+              Terms & Conditions
+            </a>
+            .
+          </span>
+        </label>
+        {currentUser.termsAccepted ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>Accepted{currentUser.termsAcceptedAt ? ` on ${new Date(currentUser.termsAcceptedAt).toLocaleString()}` : "."}</span>
+          </div>
+        ) : (
+          <p className="text-xs text-amber-300">Please accept Terms & Conditions to continue using all features.</p>
+        )}
+      </Card>
+
       <Button onClick={updateProfile} disabled={loading}>
         {loading ? "Updating..." : isDirty ? "Update Profile" : "No Changes Yet"}
       </Button>
@@ -249,6 +308,7 @@ export default function ProfilePage() {
       >
         Logout
       </Button>
+      <LegalFooter />
       <BottomNav />
     </main>
   );

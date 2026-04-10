@@ -11,6 +11,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { LegalFooter } from "@/components/legal-footer";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -151,6 +152,8 @@ export default function SetupPage() {
       <Button className="w-full" onClick={save} disabled={loading}>
         {loading ? "Saving..." : "Complete Setup"}
       </Button>
+
+      <LegalFooter className="pb-4" />
     </main>
   );
 }

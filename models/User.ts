@@ -24,6 +24,8 @@ const userSchema = new Schema(
     activeMatch: { type: Schema.Types.ObjectId, ref: "User", default: null },
     matchStartedAt: { type: Date, default: null },
     freezeUntil: { type: Date, default: null },
+    termsAccepted: { type: Boolean, default: false },
+    termsAcceptedAt: { type: Date, default: null },
     magicKey: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     fcmToken: { type: String, default: null },
   },
@@ -35,8 +37,12 @@ export type UserDoc = InferSchemaType<typeof userSchema> & { _id: string };
 const existingUserModel = models.User;
 
 // In dev, Next.js hot reload can keep an older compiled model around.
-// Recompile if that stale model still expects the removed phone field.
-if (existingUserModel?.schema.path("phone")) {
+// Recompile if that stale model is missing latest auth fields.
+if (
+  existingUserModel?.schema.path("phone") ||
+  !existingUserModel?.schema.path("termsAccepted") ||
+  !existingUserModel?.schema.path("termsAcceptedAt")
+) {
   delete models.User;
 }
 

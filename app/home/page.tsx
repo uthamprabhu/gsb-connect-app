@@ -13,22 +13,38 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { BottomNav } from "@/components/bottom-nav";
+import { LegalFooter } from "@/components/legal-footer";
 
 export default function HomePage() {
   const router = useRouter();
-  const { token, user, hasHydrated, authReady, attemptsLeft, notifications, setUser, setAttemptsLeft, setNotifications } = useAppStore();
+  const {
+    token,
+    user,
+    hasHydrated,
+    authReady,
+    attemptsLeft,
+    notifications,
+    stats,
+    setUser,
+    setAttemptsLeft,
+    setNotifications,
+    setStats,
+  } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [enablingPush, setEnablingPush] = useState(false);
+  const [matchRevealDismissed, setMatchRevealDismissed] = useState(false);
+  const [pendingRequestIds, setPendingRequestIds] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
   const meLoadedRef = useRef(false);
   const autoRegisteredTokenRef = useRef<string | null>(null);
-  const [stats, setStats] = useState({ totalUsers: 0, maleCount: 0, femaleCount: 0 });
   const currentUser = (user || {}) as {
     displayName?: string;
     instagramUsername?: string;
     instagramUrl?: string;
     activeMatch?: { instagramUsername?: string; instagramUrl?: string };
     freezeUntil?: string | null;
+    isFreezeActive?: boolean;
+    termsAccepted?: boolean;
   };
 
   useEffect(() => {
@@ -41,24 +57,34 @@ export default function HomePage() {
     api("/api/user/me", token)
       .then((res) => {
         setUser(res.user);
-        setAttemptsLeft(res.user.attemptsLeft || 0);
-        setStats(res.stats);
+        setAttemptsLeft(Number(res.user.attemptsLeft) || 0);
+        setStats(
+          res.stats || {
+            totalUsers: 0,
+            maleCount: 0,
+            femaleCount: 0,
+          },
+        );
       })
       .catch(() => {
         meLoadedRef.current = false;
       });
-  }, [authReady, hasHydrated, router, setAttemptsLeft, setUser, token, user]);
+  }, [authReady, hasHydrated, router, setAttemptsLeft, setStats, setUser, token, user]);
 
   useEffect(() => {
     if (!token) return;
     const fetchNotifications = async () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const res = await api("/api/notifications", token);
         setNotifications(res.notifications || []);
+        setPendingRequestIds(
+          Array.isArray(res.pendingRequests) ? res.pendingRequests.map((id: unknown) => String(id)) : [],
+        );
       } catch {}
     };
     void fetchNotifications();
-    const id = setInterval(fetchNotifications, 15000);
+    const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [setNotifications, token]);
 
@@ -72,6 +98,8 @@ export default function HomePage() {
     typeof window !== "undefined" &&
     "Notification" in window &&
     Notification.permission !== "granted";
+  const freezeActive = !!currentUser.isFreezeActive;
+  const canShowRevealModal = !!currentUser.activeMatch && freezeActive && !matchRevealDismissed;
 
   async function registerFcmTokenWithSessionRetry(fcmToken: string) {
     const firstToken = useAppStore.getState().token;
@@ -168,16 +196,54 @@ export default function HomePage() {
   }
 
   async function onAccept(fromUserId: string) {
-    await api("/api/match/accept", token, { method: "POST", body: JSON.stringify({ fromUserId }) });
-    confetti({ particleCount: 130, spread: 90 });
-    toast.success("Match success! Reveal unlocked.");
-    const me = await api("/api/user/me", token);
-    setUser(me.user);
+    if (!token) return;
+    try {
+      await api("/api/match/accept", token, { method: "POST", body: JSON.stringify({ fromUserId }) });
+      confetti({ particleCount: 130, spread: 90 });
+      toast.success("Match success! Reveal unlocked.");
+      const me = await api("/api/user/me", token);
+      setUser(me.user);
+      setAttemptsLeft(Number(me.user.attemptsLeft) || 0);
+      setStats(
+        me.stats || {
+          totalUsers: 0,
+          maleCount: 0,
+          femaleCount: 0,
+        },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes("no pending request found")) {
+        toast.info("This request is no longer pending.");
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      const latestNotifications = await api("/api/notifications", token).catch(() => null);
+      if (latestNotifications) {
+        setNotifications(latestNotifications.notifications || []);
+        setPendingRequestIds(
+          Array.isArray(latestNotifications.pendingRequests)
+            ? latestNotifications.pendingRequests.map((id: unknown) => String(id))
+            : [],
+        );
+      }
+    }
   }
 
   async function onReject(fromUserId: string) {
+    if (!token) return;
     await api("/api/match/reject", token, { method: "POST", body: JSON.stringify({ fromUserId }) });
     toast.success("Rejected. You will not see this user again.");
+    const latestNotifications = await api("/api/notifications", token).catch(() => null);
+    if (latestNotifications) {
+      setNotifications(latestNotifications.notifications || []);
+      setPendingRequestIds(
+        Array.isArray(latestNotifications.pendingRequests)
+          ? latestNotifications.pendingRequests.map((id: unknown) => String(id))
+          : [],
+      );
+    }
   }
 
   return (
@@ -215,10 +281,20 @@ export default function HomePage() {
       <Card className="space-y-3 text-center">
         <IoGameController className="mx-auto h-8 w-8 text-fuchsia-300" />
         <p className="text-sm text-slate-300">Mood check: Ready to meet someone meaningful?</p>
-        <Button className="w-full" onClick={findMatch} disabled={loading || attemptsLeft <= 0 || !!currentUser.freezeUntil}>
+        <Button className="w-full" onClick={findMatch} disabled={loading || attemptsLeft <= 0 || freezeActive}>
           {loading ? <><LoaderCircle className="mr-1 h-4 w-4 animate-spin" />Matching...</> : "Find Match"}
         </Button>
         {attemptsLeft <= 0 ? <p className="text-xs text-rose-300">No attempts left.</p> : null}
+        {freezeActive ? (
+          <p className="text-xs text-emerald-300">
+            Come back after 48 hours. For now, get to know the person you matched with.
+          </p>
+        ) : null}
+        {freezeActive && currentUser.activeMatch ? (
+          <Button size="sm" variant="ghost" className="w-full" onClick={() => setMatchRevealDismissed(false)}>
+            View Matched Profile Again
+          </Button>
+        ) : null}
       </Card>
 
       <Card className="space-y-2">
@@ -226,7 +302,7 @@ export default function HomePage() {
         {!notifications.length ? <p className="text-sm text-slate-400">No notifications yet.</p> : notifications.map((n) => (
           <div key={String(n._id)} className="rounded-xl bg-white/5 p-3 text-sm">
             <p>{n.type === "match_request" ? "Someone requested to match with you." : "Your request got accepted!"}</p>
-            {n.type === "match_request" ? (
+            {n.type === "match_request" && pendingRequestIds.includes(String(n.fromUserId)) ? (
               <div className="mt-2 flex gap-2">
                 <Button size="sm" onClick={() => onAccept(String(n.fromUserId))}>Accept</Button>
                 <Button size="sm" variant="danger" onClick={() => onReject(String(n.fromUserId))}>Reject</Button>
@@ -236,7 +312,16 @@ export default function HomePage() {
         ))}
       </Card>
 
-      <Modal open={!!currentUser.activeMatch} onClose={() => {}} title="Match Success">
+      {!currentUser.termsAccepted ? (
+        <Card className="space-y-2 border border-amber-400/30 bg-amber-500/10">
+          <p className="text-xs text-amber-100">Please accept Terms & Conditions from Profile to stay fully compliant.</p>
+          <Button size="sm" variant="ghost" onClick={() => router.push("/profile")}>
+            Open Profile
+          </Button>
+        </Card>
+      ) : null}
+
+      <Modal open={canShowRevealModal} onClose={() => setMatchRevealDismissed(true)} title="Match Success">
         <div className="space-y-3">
           <p className="text-sm">You both accepted. Instagram reveal is live.</p>
           <div className="rounded-xl bg-white/5 p-3">
@@ -258,6 +343,7 @@ export default function HomePage() {
         </div>
       </Modal>
 
+      <LegalFooter />
       <BottomNav />
     </main>
   );
