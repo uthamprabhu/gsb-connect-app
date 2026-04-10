@@ -9,10 +9,12 @@ import { useAppStore } from "@/store/use-app-store";
 
 async function restoreBackendSession(token: string) {
   const res = await api("/api/user/me", token);
+  const attemptsLeft =
+    typeof res.user?.attemptsLeft === "number" && Number.isFinite(res.user.attemptsLeft) ? res.user.attemptsLeft : 0;
   return {
     token,
     user: res.user,
-    attemptsLeft: res.user.attemptsLeft || 0,
+    attemptsLeft,
   };
 }
 
@@ -49,10 +51,14 @@ export function AuthSessionBootstrap() {
             }
 
             const res = await exchangeFirebaseUser(firebaseUser);
+            const attemptsLeft =
+              typeof res.user?.attemptsLeft === "number" && Number.isFinite(res.user.attemptsLeft)
+                ? res.user.attemptsLeft
+                : 0;
             if (cancelled) return;
             setToken(res.token);
             setUser(res.user);
-            setAttemptsLeft(res.user.attemptsLeft || 0);
+            setAttemptsLeft(attemptsLeft);
             setAuthReady(true);
             return;
           }
