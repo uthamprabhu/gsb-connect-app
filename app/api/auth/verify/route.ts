@@ -4,6 +4,35 @@ import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
 import { createSessionToken } from "@/lib/session";
 
+let cleanupPromise: Promise<void> | null = null;
+
+async function dropLegacyPhoneIndexes() {
+  const indexes = await User.collection.indexes();
+  const legacyIndexes = indexes.filter((index) => index.key && Object.prototype.hasOwnProperty.call(index.key, "phone"));
+
+  await Promise.all(
+    legacyIndexes.map(async (index) => {
+      if (!index.name) return;
+      await User.collection.dropIndex(index.name).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.toLowerCase().includes("indexnotfound")) {
+          throw error;
+        }
+      });
+    }),
+  );
+}
+
+async function ensureLegacyIndexesRemoved() {
+  if (!cleanupPromise) {
+    cleanupPromise = dropLegacyPhoneIndexes().catch((error) => {
+      cleanupPromise = null;
+      throw error;
+    });
+  }
+  await cleanupPromise;
+}
+
 export async function POST(req: Request) {
   try {
     const { idToken } = await req.json();
@@ -17,6 +46,8 @@ export async function POST(req: Request) {
     }
 
     await connectDb();
+    await ensureLegacyIndexesRemoved();
+
     const user = await User.findOneAndUpdate(
       { firebaseUid: decoded.uid },
       {
