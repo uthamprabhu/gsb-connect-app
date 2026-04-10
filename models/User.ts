@@ -2,8 +2,11 @@ import { model, models, Schema, type InferSchemaType } from "mongoose";
 
 const userSchema = new Schema(
   {
-    phone: { type: String, required: true, unique: true },
     firebaseUid: { type: String, required: true, unique: true },
+    authProvider: { type: String, enum: ["google"], default: "google" },
+    email: { type: String, unique: true, sparse: true, lowercase: true, trim: true, default: null },
+    displayName: { type: String, trim: true, default: "" },
+    photoURL: { type: String, default: "" },
     instagramUsername: { type: String, default: "" },
     instagramUrl: { type: String, default: "" },
     gender: { type: String, enum: ["male", "female", "other"], default: null },
@@ -28,4 +31,13 @@ const userSchema = new Schema(
 );
 
 export type UserDoc = InferSchemaType<typeof userSchema> & { _id: string };
+
+const existingUserModel = models.User;
+
+// In dev, Next.js hot reload can keep an older compiled model around.
+// Recompile if that stale model still expects the removed phone field.
+if (existingUserModel?.schema.path("phone")) {
+  delete models.User;
+}
+
 export const User = models.User || model("User", userSchema);

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { AuthSessionBootstrap } from "@/components/auth-session-bootstrap";
 import { NotificationBootstrap } from "@/components/notification-bootstrap";
 import "./globals.css";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+        <AuthSessionBootstrap />
         {children}
         <NotificationBootstrap />
         <Toaster richColors position="top-center" />

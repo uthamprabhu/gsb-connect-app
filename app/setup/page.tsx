@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Slider from "@mui/material/Slider";
+import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { TAG_OPTIONS, GENDER_OPTIONS, PREFERENCE_OPTIONS } from "@/lib/constants";
 import { api, hasCompletedSetup } from "@/lib/client-api";
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button";
 
 export default function SetupPage() {
   const router = useRouter();
-  const { token, user, setUser } = useAppStore();
+  const { token, user, hasHydrated, authReady, setUser } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     instagramInput: "",
@@ -28,9 +29,10 @@ export default function SetupPage() {
     "w-full rounded-xl border border-white/10 bg-slate-900/80 p-3 text-sm text-slate-100 outline-none ring-fuchsia-500 focus:ring-2";
 
   useEffect(() => {
-    if (!token) return router.push("/");
-    if (hasCompletedSetup(user)) router.push("/home");
-  }, [router, token, user]);
+    if (!hasHydrated || !authReady) return;
+    if (!token) return router.replace("/");
+    if (hasCompletedSetup(user)) router.replace("/home");
+  }, [authReady, hasHydrated, router, token, user]);
 
   async function save() {
     if (!form.instagramInput.trim()) return toast.error("Instagram is required");
@@ -62,6 +64,13 @@ export default function SetupPage() {
 
   return (
     <main className="screen-shell gap-4">
+      {!hasHydrated || !authReady ? (
+        <Card className="flex items-center gap-2">
+          <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+          Restoring your session...
+        </Card>
+      ) : null}
+
       <Card className="space-y-2">
         <h1 className="text-xl font-bold">Profile Setup</h1>
         <p className="text-xs text-slate-300">Complete all required fields to unlock matchmaking.</p>

@@ -12,7 +12,7 @@ export async function GET() {
 
     const fromUserIds = notifications.map((n) => n.fromUserId);
     const users = await User.find({ _id: { $in: fromUserIds } })
-      .select("instagramUsername phone")
+      .select("instagramUsername displayName")
       .lean();
     const userMap = Object.fromEntries(users.map((u) => [String(u._id), u]));
 

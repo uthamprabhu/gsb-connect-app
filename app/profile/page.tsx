@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Slider from "@mui/material/Slider";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, hasCompletedSetup } from "@/lib/client-api";
+import { logoutClientSession } from "@/lib/session-client";
 import { useAppStore } from "@/store/use-app-store";
 import { TAG_OPTIONS, GENDER_OPTIONS, PREFERENCE_OPTIONS } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { BottomNav } from "@/components/bottom-nav";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { token, user, setUser, setAttemptsLeft, logout } = useAppStore();
+  const { token, user, hasHydrated, authReady, setUser, setAttemptsLeft } = useAppStore();
   const hydratedRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [showMagicKey, setShowMagicKey] = useState(false);
@@ -41,10 +42,11 @@ export default function ProfilePage() {
   } | null>(null);
 
   const currentUser = (user || {}) as {
+    displayName?: string;
+    email?: string;
     instagramUsername?: string;
     instagramUrl?: string;
     magicKey?: string;
-    phone?: string;
     gender?: string;
     preference?: string;
     age?: number;
@@ -53,8 +55,9 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    if (!token) return router.push("/");
-    if (user && !hasCompletedSetup(user)) return router.push("/setup");
+    if (!hasHydrated || !authReady) return;
+    if (!token) return router.replace("/");
+    if (user && !hasCompletedSetup(user)) return router.replace("/setup");
     if (hydratedRef.current) return;
     api("/api/user/me", token)
       .then((res) => {
@@ -81,7 +84,7 @@ export default function ProfilePage() {
         hydratedRef.current = true;
       })
       .catch(() => {});
-  }, [router, setAttemptsLeft, setUser, token]);
+  }, [authReady, hasHydrated, router, setAttemptsLeft, setUser, token, user]);
 
   const isDirty =
     !!initialFormRef.current &&
@@ -136,14 +139,23 @@ export default function ProfilePage() {
 
   return (
     <main className="screen-shell gap-4">
+      {!hasHydrated || !authReady ? (
+        <Card className="flex items-center gap-2">
+          <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+          Restoring your session...
+        </Card>
+      ) : null}
+
       <Card className="space-y-2">
         <h1 className="text-xl font-bold">Profile</h1>
         <p className="text-xs text-slate-300">Edit your profile anytime. Changes apply immediately.</p>
       </Card>
 
       <Card className="space-y-3">
-        <label className="text-xs text-slate-300">Phone (read-only)</label>
-        <Input value={currentUser.phone || ""} disabled />
+        <label className="text-xs text-slate-300">Google Name (read-only)</label>
+        <Input value={currentUser.displayName || ""} disabled />
+        <label className="text-xs text-slate-300">Google Email (read-only)</label>
+        <Input value={currentUser.email || ""} disabled />
         <label className="text-xs text-slate-300">Instagram Username or URL (required)</label>
         <Input value={form.instagramInput} onChange={(e) => setForm((prev) => ({ ...prev, instagramInput: e.target.value }))} />
         <label className="text-xs text-slate-300">Magic Key (required, unique)</label>
@@ -230,8 +242,9 @@ export default function ProfilePage() {
       <Button
         variant="danger"
         onClick={() => {
-          logout();
-          router.push("/");
+          void logoutClientSession().finally(() => {
+            router.replace("/");
+          });
         }}
       >
         Logout

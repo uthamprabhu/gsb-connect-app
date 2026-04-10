@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
 import { Heart, LoaderCircle, Sparkles, Copy, ExternalLink } from "lucide-react";
@@ -16,12 +16,14 @@ import { BottomNav } from "@/components/bottom-nav";
 
 export default function HomePage() {
   const router = useRouter();
-  const { token, user, attemptsLeft, notifications, setUser, setAttemptsLeft, setNotifications } = useAppStore();
+  const { token, user, hasHydrated, authReady, attemptsLeft, notifications, setUser, setAttemptsLeft, setNotifications } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [enablingPush, setEnablingPush] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const meLoadedRef = useRef(false);
   const [stats, setStats] = useState({ totalUsers: 0, maleCount: 0, femaleCount: 0 });
   const currentUser = (user || {}) as {
+    displayName?: string;
     instagramUsername?: string;
     instagramUrl?: string;
     activeMatch?: { instagramUsername?: string; instagramUrl?: string };
@@ -29,16 +31,22 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!token) return router.push("/");
-    if (user && !hasCompletedSetup(user)) return router.push("/setup");
+    if (!hasHydrated || !authReady) return;
+    if (!token) return router.replace("/");
+    if (user && !hasCompletedSetup(user)) return router.replace("/setup");
+    if (meLoadedRef.current) return;
+    meLoadedRef.current = true;
+
     api("/api/user/me", token)
       .then((res) => {
         setUser(res.user);
         setAttemptsLeft(res.user.attemptsLeft || 0);
         setStats(res.stats);
       })
-      .catch(() => {});
-  }, [router, setAttemptsLeft, setUser, token]);
+      .catch(() => {
+        meLoadedRef.current = false;
+      });
+  }, [authReady, hasHydrated, router, setAttemptsLeft, setUser, token, user]);
 
   useEffect(() => {
     if (!token) return;
@@ -139,12 +147,19 @@ export default function HomePage() {
 
   return (
     <main className="screen-shell gap-4">
+      {!hasHydrated || !authReady ? (
+        <Card className="flex items-center gap-2">
+          <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+          Restoring your session...
+        </Card>
+      ) : null}
+
       <Card className="space-y-2">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Home Arena</h1>
           <Sparkles className="h-4 w-4 text-cyan-300" />
         </div>
-        <p className="text-xs text-slate-300">Welcome, {currentUser.instagramUsername || "Player"}.</p>
+        <p className="text-xs text-slate-300">Welcome, {currentUser.displayName || currentUser.instagramUsername || "Player"}.</p>
       </Card>
 
       <Card className="grid grid-cols-3 gap-2 text-center text-xs">

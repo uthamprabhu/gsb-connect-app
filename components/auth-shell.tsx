@@ -2,7 +2,7 @@
 
 import Lottie from "lottie-react";
 import { motion } from "framer-motion";
-import { Sparkles, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import SlotLoader from "@/components/SlotLoader";
 
@@ -19,7 +19,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <Sparkles className="h-3.5 w-3.5" /> Gamified
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-1">
-            <ShieldCheck className="h-3.5 w-3.5" /> Secure OTP
+            <ShieldCheck className="h-3.5 w-3.5" /> Trusted Sign-In
           </span>
         </div>
 

@@ -10,16 +10,30 @@ export async function POST(req: Request) {
     if (!idToken) return NextResponse.json({ error: "idToken required" }, { status: 400 });
 
     const decoded = await adminAuth.verifyIdToken(idToken);
+    const provider = decoded.firebase.sign_in_provider;
+
+    if (provider !== "google.com") {
+      return NextResponse.json({ error: "Only Google sign-in is supported for Firebase authentication" }, { status: 400 });
+    }
+
     await connectDb();
     const user = await User.findOneAndUpdate(
       { firebaseUid: decoded.uid },
-      { $setOnInsert: { phone: decoded.phone_number || "", firebaseUid: decoded.uid } },
-      { upsert: true, new: true },
+      {
+        $set: {
+          firebaseUid: decoded.uid,
+          authProvider: "google",
+          email: decoded.email || null,
+          displayName: decoded.name || "",
+          photoURL: decoded.picture || "",
+        },
+      },
+      { upsert: true, returnDocument: "after" },
     );
 
     const token = createSessionToken(String(user._id));
     return NextResponse.json({ user, token });
   } catch (error) {
-    return NextResponse.json({ error: "OTP verification failed", details: String(error) }, { status: 401 });
+    return NextResponse.json({ error: "Google sign-in verification failed", details: String(error) }, { status: 401 });
   }
 }
