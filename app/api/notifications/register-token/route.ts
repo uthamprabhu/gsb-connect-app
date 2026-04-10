@@ -15,6 +15,12 @@ export async function POST(req: Request) {
     console.info("[FCM] Token saved for user:", { userId: String(user._id), tokenPreview: `${fcmToken.slice(0, 12)}...` });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to register token", details: String(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message === "Unauthorized" || message === "User not found") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    return NextResponse.json({ error: "Failed to register token", details: message }, { status: 500 });
   }
 }

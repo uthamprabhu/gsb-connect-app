@@ -21,6 +21,7 @@ export default function HomePage() {
   const [enablingPush, setEnablingPush] = useState(false);
   const [mounted, setMounted] = useState(false);
   const meLoadedRef = useRef(false);
+  const autoRegisteredTokenRef = useRef<string | null>(null);
   const [stats, setStats] = useState({ totalUsers: 0, maleCount: 0, femaleCount: 0 });
   const currentUser = (user || {}) as {
     displayName?: string;
@@ -72,21 +73,55 @@ export default function HomePage() {
     "Notification" in window &&
     Notification.permission !== "granted";
 
-  async function enableNotifications() {
-    if (!token) return;
-    setEnablingPush(true);
+  async function registerFcmTokenWithSessionRetry(fcmToken: string) {
+    const firstToken = useAppStore.getState().token;
+    if (!firstToken) throw new Error("Unauthorized");
+
     try {
-      const fcmToken = await enableFcmAndGetToken();
-      await api("/api/notifications/register-token", token, {
+      await api("/api/notifications/register-token", firstToken, {
         method: "POST",
         body: JSON.stringify({ fcmToken }),
       });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.toLowerCase().includes("unauthorized")) {
+        throw error;
+      }
+    }
+
+    const secondToken = useAppStore.getState().token;
+    if (!secondToken || secondToken === firstToken) {
+      throw new Error("Unauthorized");
+    }
+
+    await api("/api/notifications/register-token", secondToken, {
+      method: "POST",
+      body: JSON.stringify({ fcmToken }),
+    });
+  }
+
+  async function enableNotifications() {
+    if (!hasHydrated || !authReady || !token) {
+      toast.error("Session is still loading. Try again in a moment.");
+      return;
+    }
+
+    setEnablingPush(true);
+    try {
+      const fcmToken = await enableFcmAndGetToken();
+      await registerFcmTokenWithSessionRetry(fcmToken);
+      autoRegisteredTokenRef.current = fcmToken;
       toast.success("Notifications enabled. You will never miss a match.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.toLowerCase().includes("denied")) {
+      const lower = message.toLowerCase();
+
+      if (lower.includes("unauthorized")) {
+        toast.error("Your session expired. Please sign in again.");
+      } else if (lower.includes("denied")) {
         toast.error("Permission denied. Enable notifications from browser settings.");
-      } else if (message.toLowerCase().includes("vapid")) {
+      } else if (lower.includes("vapid")) {
         toast.error("FCM config issue: invalid VAPID key. Update NEXT_PUBLIC_FIREBASE_VAPID_KEY and restart dev server.");
       } else {
         toast.error(message || "Unable to enable notifications right now.");
@@ -97,22 +132,22 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    if (!token || typeof window === "undefined") return;
+    if (!hasHydrated || !authReady || !token || typeof window === "undefined") return;
     if (Notification.permission !== "granted") return;
+
     const registerIfGranted = async () => {
       try {
         const fcmToken = await enableFcmAndGetToken();
-        await api("/api/notifications/register-token", token, {
-          method: "POST",
-          body: JSON.stringify({ fcmToken }),
-        });
+        if (autoRegisteredTokenRef.current === fcmToken) return;
+        await registerFcmTokenWithSessionRetry(fcmToken);
+        autoRegisteredTokenRef.current = fcmToken;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("FCM auto-register failed:", message);
       }
     };
     void registerIfGranted();
-  }, [token]);
+  }, [authReady, hasHydrated, token]);
 
   async function findMatch() {
     setLoading(true);
